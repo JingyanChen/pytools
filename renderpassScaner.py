@@ -18,6 +18,7 @@ class renderpassInfo:
         self.rp = ""
         self.fb = ""
         self.dsImageName = ""
+        self.colorImageNameList = []
         self.cb = ""
 
     def set_beginLine(self,beginLine):
@@ -36,6 +37,8 @@ class renderpassInfo:
         self.dsImageName = dsImageName;
     def set_cb(self,cb):
         self.cb = cb;
+    def set_colorImageName(self,colorImageName):
+        self.colorImageNameList.append(colorImageName);
 
 def count_draw_dispatch_lines_between(script_code, start_line, end_line,cb):
     draw_lines = 0
@@ -146,7 +149,21 @@ def analyze_renderpasses(file_path):
                                         sys.exit(1) 
                                     #print(dsAttachment.group(1))
 
-                    
+                                colorAttachmentId = []
+                                if("pColorAttachments = NULL," in subpass_createInfo):
+                                    pass
+                                else:
+                                    #print(subpass_createInfo)
+                                    if("attachment = (" in subpass_createInfo):
+                                        color_attachment_match = re.search(r'attachment\s*=\s*\((\s*\d+\s*(?:,\s*\d+\s*)*)\)\s*,', subpass_createInfo, re.DOTALL)
+                                        #print(color_attachment_match.group(0))
+                                        colorAttachmentIdMatch = re.search(r'attachment\s*=\s*\((\d+(?:,\s*\d+)*)\)', color_attachment_match.group(0))
+                                        #print(colorAttachmentIdMatch.group(1))
+                                        colorAttachmentId = colorAttachmentIdMatch.group(1).split(',')
+                                    else:
+                                        colorAttachmentIdMatch = re.search(r'attachment\s*=\s*(\d+)', subpass_createInfo)
+                                        colorAttachmentId.append(colorAttachmentIdMatch.group(1))
+                                   
                     if(dsAttachmentId):
                         #通过ds id 到对应的framebuffer去找到对应的ImageView，最终确定imagename
                         escaped_info_fb = re.escape(info.fb)
@@ -180,7 +197,44 @@ def analyze_renderpasses(file_path):
                     else:
                         info.set_dsImageName("NULL")
                         #print("null ds attachment")
-                        
+                    
+                    if(len(colorAttachmentId)):
+                        #print(colorAttachmentId)
+                        #通过color attachment id 到对应framebuffer去中对应的imgeView，最终确定imagename
+                        for colorId in colorAttachmentId:
+                            #通过ds id 到对应的framebuffer去找到对应的ImageView，最终确定imagename
+                            escaped_info_fb = re.escape(info.fb)
+                            fb_definition = re.search(f'vkCreateFramebuffer+\((.*?), (.*?), (.*?), {escaped_info_fb}\);', script_code)
+                            fb_createInfoName = fb_definition.group(2)
+                            #print(fb_create)
+                            fb_createInfo_match = re.search(f'{fb_createInfoName}+\[(\d+)\]\s*=\s*\((.*?)\);', script_code, re.DOTALL)
+                            fb_createInfo = fb_createInfo_match.group(0)
+                            
+                            attachementInfoMatch = re.search(r'pAttachments\s*=\s*\[\d+\]\((.*?)\)', fb_createInfo)
+                            attachmentList = attachementInfoMatch.group(1).split(',')
+                            
+                            try:
+                                color_imageView = attachmentList[int(colorId)]
+                                color_imageView = color_imageView.replace(' ','')
+                                    #found imageView related image name
+                                #print(ds_imageView)
+                                color_imageView_definition = re.search(f'vkCreateImageView+\((.*?), (.*?), (.*?), {color_imageView}\);', script_code)
+                                colorImageCreateInfoName = color_imageView_definition.group(2)
+                                
+                                colorImageViewCreateMatch = re.search(f'{colorImageCreateInfoName}+\[(\d+)\]\s*=\s*\((.*?)\);', script_code, re.DOTALL)
+                                colorImageViewCreateInfo = colorImageViewCreateMatch.group(0)
+                                
+                                colorImageNameMatch = re.search(r'image\s*=\s*([^,]+)', colorImageViewCreateInfo)
+                                #print(imageNameMatch.group(1))
+                                colorImageNameMatch = colorImageNameMatch.group(1)
+                                info.set_colorImageName(colorImageNameMatch)
+                            except:
+                                print("get vk image failed")
+                                sys.exit(1) 
+                        else:
+                            pass
+                            #info.set_dsImageName("NULL")
+                            #print("null ds attachment")     
                         
                     renderpassInfoArray.append(info)
                     info = renderpassInfo()
@@ -254,6 +308,6 @@ if __name__ == "__main__":
     
     for obj in sorted_objects:
         if isinstance(obj, renderpassInfo):
-            print(f"Renderpass({obj.beginLine} - {obj.endLine}) cb {obj.cb}  drawNum {obj.drawNum} DsImage {obj.dsImageName}")
+            print(f"Renderpass({obj.beginLine} - {obj.endLine}) cb {obj.cb}  drawNum {obj.drawNum} ColorImage {obj.colorImageNameList} DsImage {obj.dsImageName}")
         elif isinstance(obj, submitInfo):
             print(f"submitLine {obj.lineNum} cb {obj.cb}")
