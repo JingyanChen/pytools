@@ -310,4 +310,4 @@ if __name__ == "__main__":
         if isinstance(obj, renderpassInfo):
             print(f"Renderpass({obj.beginLine} - {obj.endLine}) cb {obj.cb}  drawNum {obj.drawNum} ColorImage {obj.colorImageNameList} DsImage {obj.dsImageName}")
         elif isinstance(obj, submitInfo):
-            print(f"submitLine {obj.lineNum} cb {obj.cb}")
+            print(f"▓▓▓▓▓▓▓▓submitLine {obj.lineNum} cb {obj.cb}")
